@@ -82,7 +82,6 @@ Rebuild `report.py` in SQL over the silver tables, then go further. Use
 - [Data Engineering Zoomcamp](https://github.com/DataTalksClub/data-engineering-zoomcamp) (free, self-paced): Docker, dbt, Spark, Kafka - make this project your final project
 - STDF V4 specification (search "STDF V4 specification Teradyne") for every record field used here
 
-## License note
+## License
 
-This project imports pystdf, which is GPL-licensed. Pick a GPL-compatible
-license (e.g. GPL-3.0) if you publish it.
+GPL-2.0-or-later (see `LICENSE`), matching pystdf, which this project imports.

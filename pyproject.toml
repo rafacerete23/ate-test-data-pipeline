@@ -3,6 +3,7 @@ name = "ate-test-data-pipeline"
 version = "0.1.0"
 description = "From ATE test data (STDF) to yield analytics: a hands-on data engineering learning project"
 requires-python = ">=3.10"
+license = { text = "GPL-2.0-or-later" }
 dependencies = [
     "pystdf>=1.4.0",
     "pandas>=2.0",
