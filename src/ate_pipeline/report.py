@@ -25,6 +25,25 @@ def yield_summary(parts: pd.DataFrame) -> dict:
     return {"tested": tested, "good": good, "yield_pct": round(100 * good / tested, 2) if tested else None}
 
 
+def die_yield(parts: pd.DataFrame) -> dict:
+    """Yield per physical die (X/Y) instead of per test insertion.
+
+    Dies that fail are often re-probed at the end of the wafer, so the PRR
+    count (and the tester's own HBR/SBR summary) counts them twice.
+    First-pass yield uses each die's first insertion, final yield its last.
+    """
+    p = parts.sort_values("part_index")
+    first = p.drop_duplicates(["x", "y"], keep="first")
+    last = p.drop_duplicates(["x", "y"], keep="last")
+    return {
+        "insertions": len(p),
+        "dies": len(first),
+        "retested": len(p) - len(first),
+        "first_pass_yield_pct": round(100 * float(first["passed"].mean()), 2),
+        "final_yield_pct": round(100 * float(last["passed"].mean()), 2),
+    }
+
+
 def bin_pareto(parts: pd.DataFrame) -> pd.DataFrame:
     fails = parts[parts["passed"] == False]  # noqa: E712 - pandas boolean mask
     p = fails.groupby("hard_bin").size().sort_values(ascending=False).rename("count").to_frame()
@@ -52,7 +71,8 @@ def main() -> None:
     t = load(args.parquet_dir)
     lot = t["lot"].iloc[0]
     print(f"Lot {lot['lot_id']}  part {lot['part_type']}  tester {lot['tester_type']}  program {lot['program']} rev {lot['program_rev']}")
-    print("Yield:", yield_summary(t["parts"]))
+    print("Insertion yield (what the tester's bin summary counts):", yield_summary(t["parts"]))
+    print("Die yield:", die_yield(t["parts"]))
     print("\nHard-bin Pareto (failing parts):")
     print(bin_pareto(t["parts"]).head(args.top).to_string())
     print(f"\n{args.top} lowest-Cpk tests:")

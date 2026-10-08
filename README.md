@@ -8,16 +8,28 @@ semiconductor test data.
 
 Three public demo STDF files from wafer sort (Galaxy Semiconductor demo data,
 shipped with [pystdf](https://github.com/cmars/pystdf)): lot `GAL-LOT`, part
-`GOLD8BAR`, tester `A530`. About 1,570 dies per file with X/Y wafer
-coordinates, ~52,000 parametric measurements with limits and units, plus the
-tester's own hard/soft bin summaries.
+`GOLD8BAR`, tester `A530`. Each wafer has 1,456 dies with X/Y coordinates,
+plus end-of-wafer retests (about 1,600 test insertions per file), ~52,000
+parametric measurements with limits and units, and the tester's own hard/soft
+bin summaries. `demofile.stdf` turns out to be `lot3.stdf` relabelled, so
+there are two distinct wafers.
+
+## Results
+
+[`docs/FINDINGS.md`](docs/FINDINGS.md) has what the data says, with figures.
+In short: the tester's yield counts retests twice; one failing bin is a
+measurement-resolution problem that disappears on retest; another is an
+off-centre trim target; and the wafer edge fails about twice as often (logistic
+regression).
+
+![Wafer maps](docs/figures/wafer_maps.png)
 
 ## Setup
 
 ```bash
 python -m venv .venv
 .venv\Scripts\activate          # Windows  (macOS/Linux: source .venv/bin/activate)
-pip install -e ".[dev]"
+pip install -e ".[dev]"            # includes the analysis extras (matplotlib, scipy, statsmodels)
 python scripts/get_sample_data.py
 pytest
 ```
@@ -39,7 +51,9 @@ python -m ate_pipeline.report data/parquet/lot2
 | `bins` | tester's HBR/SBR records | kind, head, site, bin, count |
 
 The tests check the parser against the tester's own bookkeeping: computed good
-dies must equal the tester's bin-1 count (lot2: 1,389 of 1,569, 88.53% yield).
+insertions must equal the tester's bin-1 count (lot2: 1,389 of 1,569). That is
+insertion yield, 88.53%. Per die, lot2 is 92.24% first pass and 95.40% final
+(`report.die_yield`).
 
 STDF details worth knowing before you extend it:
 - A PTR carries limits and units only on the first occurrence of each test;
@@ -48,19 +62,31 @@ STDF details worth knowing before you extend it:
   the part and carries its bin, pass flag and X/Y (`_on_prr`).
 - `HEAD_NUM == 255` on HBR/SBR means "summary across all sites".
 
+## Analysis (done)
+
+```bash
+python -m ate_pipeline.analysis data/raw/lot2.stdf data/raw/lot3.stdf data/raw/demofile.stdf --figures docs/figures
+```
+
+`analysis.py` adds content fingerprinting (skips duplicate files), datalog
+coverage, per-die yield with retest recovery, bin signatures, classic vs robust
+Cpk with a measurement-resolution check, wafer maps, a radial logistic
+regression and a failure-burst test.
+
 ## Phase 2 - Pipeline in PySpark / Databricks (your turn)
 
 Goal: process all three lots as one dataset.
 - [ ] Ingest all files in `data/raw/` with a `lot_id`/`source_file` column on every table
 - [ ] Load the Parquet into Spark (`spark.read.parquet`) - locally with `pip install pyspark`, or in Databricks Free Edition
-- [ ] Write them as Delta tables in a bronze/silver layout: bronze = as parsed, silver = typed, deduplicated, with `wafer_id` + `part_id` as the key
+- [ ] Write them as Delta tables in a bronze/silver layout: bronze = as parsed, silver = typed, deduplicated, with `lot_id` + `wafer_id` + `x` + `y` as the die key (`part_id` repeats across retests of the same die)
+- [ ] Add a gold `die_result` table with first-pass and final bin per die, and check it against `report.die_yield`
 - [ ] Make the job idempotent: re-running on the same file must not duplicate rows
 
 ## Phase 3 - Analytics in SQL (your turn)
 
 Rebuild `report.py` in SQL over the silver tables, then go further. Use
 `report.py`'s output as the answer key.
-- [ ] Yield per lot and per wafer
+- [ ] Yield per lot and per wafer, first pass and final (answer key: `analysis.py`)
 - [ ] Hard-bin Pareto with cumulative %
 - [ ] Cpk per test (window functions), worst 10 per lot
 - [ ] Drift: per-test mean and sigma per lot - which tests move between lots?
@@ -68,7 +94,8 @@ Rebuild `report.py` in SQL over the silver tables, then go further. Use
 
 ## Phase 4 - Dashboard (your turn)
 
-- [ ] Wafer map: X/Y coloured by hard bin (matplotlib or plotly)
+- [x] Wafer map: X/Y coloured by hard bin (`analysis.plot_wafer_maps`)
+- [ ] Interactive version (plotly) with a lot selector and hover showing the die's tests
 - [ ] Yield trend and bin Pareto per lot
 - [ ] Databricks SQL dashboard or a small Streamlit app
 
